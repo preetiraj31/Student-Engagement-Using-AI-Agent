@@ -95,7 +95,7 @@ KPI Generate (Code node)
 
 ---
 
-## 📈 Charts in the Report
+##  Charts in the Report
 
 - **Student Count by Location**: Mumbai (89), Delhi (83) and Bengaluru (82) lead
 - **Dropout Risk by Engagement Level**: shows how engagement strongly drives dropout risk
@@ -114,7 +114,7 @@ KPI Generate (Code node)
 2. Early-warning outreach (SMS/email) when a student slips from High to Medium engagement
 3. Gamify live sessions (polls, breakouts, leaderboard quizzes) to convert attendance into engagement
 
-## 🚀 How to Use
+##  How to Use
 
 1. Create an [n8n](https://n8n.io/) account (Cloud or self-hosted)
 2. Import `workflow/student_engagement_workflow.json` (**Workflows → Import from File**)

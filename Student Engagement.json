@@ -1,0 +1,307 @@
+{
+  "name": "Student Engagement",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "documentId": {
+          "__rl": true,
+          "value": "1UomIfC-ZfHhVBsURzXSToynnmyDZOPz9IpfUglCibyQ",
+          "mode": "list",
+          "cachedResultName": "student_engagement _dataset",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UomIfC-ZfHhVBsURzXSToynnmyDZOPz9IpfUglCibyQ/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 881762515,
+          "mode": "list",
+          "cachedResultName": "student_engagement_dataset",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1UomIfC-ZfHhVBsURzXSToynnmyDZOPz9IpfUglCibyQ/edit#gid=881762515"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 1,
+      "position": [
+        -480,
+        -432
+      ],
+      "id": "b794d1d6-98c3-4069-978a-a60cefd679e1",
+      "name": "Google Sheets Trigger",
+      "credentials": {
+        "googleSheetsTriggerOAuth2Api": {
+          "id": "3LNixF7Gv6cs98Kb",
+          "name": "Google Sheets Trigger account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "=  You are a data analyst. Here are the KPIs of a student engagement dataset:\n  {{ JSON.stringify($json) }}\n  Write 5 short insights and 3 recommendations to reduce dropout risk.",
+        "batching": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chainLlm",
+      "typeVersion": 1.9,
+      "position": [
+        32,
+        -720
+      ],
+      "id": "279614ae-b43e-4018-b33f-b7ebf0865ddb",
+      "name": "Basic LLM Chain"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatGoogleGemini",
+      "typeVersion": 1.1,
+      "position": [
+        96,
+        -432
+      ],
+      "id": "935df6d6-7def-48de-a05d-58e44d9d1832",
+      "name": "Google Gemini Chat Model",
+      "credentials": {
+        "googlePalmApi": {
+          "id": "A5LU10XgRudjjebS",
+          "name": "Google Gemini(PaLM) Api account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "numberInputs": 10
+      },
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        560,
+        -688
+      ],
+      "id": "b1839ff8-19ff-4cc6-8f1d-5b3437e01b59",
+      "name": "Merge"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.Chart_URL }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        256,
+        -368
+      ],
+      "id": "344986f5-a0b0-4c2f-ae5c-fa2e1c158665",
+      "name": "Total Student"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.Chart_URL }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        400,
+        -240
+      ],
+      "id": "308b68e3-b370-43ba-991d-e4f2443d995b",
+      "name": "Student by location"
+    },
+    {
+      "parameters": {
+        "jsCode": "const kpi = $('KPI generate').first().json;\nlet llmText = '';\ntry { llmText = $('Basic LLM Chain').first().json.text || ''; }\ncatch (e) { llmText = $input.first().json.text || ''; }\n\nconst esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst inline = s => esc(s)\n  .replace(/\\*\\*(.+?)\\*\\*/g, '<strong>$1</strong>')\n  .replace(/\\*(.+?)\\*/g, '<em>$1</em>');\n\n// LLM markdown text -> HTML\nfunction mdToHtml(md) {\n  let html = '', list = null;\n  const close = () => { if (list) { html += `</${list}>`; list = null; } };\n  for (const raw of md.replace(/\\r/g, '').split('\\n')) {\n    const line = raw.trim();\n    if (!line) { close(); continue; }\n    let m;\n    if ((m = line.match(/^#{1,6}\\s*(.+)$/))) {\n      close();\n      html += `<h3 style=\"color:#1f3a5f;margin:18px 0 8px;font-size:17px;\">${inline(m[1])}</h3>`;\n    } else if ((m = line.match(/^\\d+\\.\\s+(.+)$/))) {\n      if (list !== 'ol') { close(); html += '<ol style=\"padding-left:20px;margin:6px 0;\">'; list = 'ol'; }\n      html += `<li style=\"margin-bottom:8px;line-height:1.5;\">${inline(m[1])}</li>`;\n    } else if ((m = line.match(/^[-*•]\\s+(.+)$/))) {\n      if (list !== 'ul') { close(); html += '<ul style=\"padding-left:20px;margin:6px 0;\">'; list = 'ul'; }\n      html += `<li style=\"margin-bottom:8px;line-height:1.5;\">${inline(m[1])}</li>`;\n    } else {\n      close();\n      html += `<p style=\"margin:8px 0;line-height:1.6;\">${inline(line)}</p>`;\n    }\n  }\n  close();\n  return html;\n}\n\n// ---- Auto executive summary (data se) ----\nconst gap = Math.round((kpi.Avg_Attendance_Percentage - kpi.Avg_Assignment_Completion_Rate) * 10) / 10;\nconst topCities = (kpi.Student_Count_By_City || []).slice(0, 3)\n  .map(c => `${esc(c.City)} (${c.Count})`).join(', ');\nconst summaryPoints = [\n  `The dataset covers <strong>${kpi.Total_Students}</strong> students with an average engagement score of <strong>${kpi.Avg_Engagement_Score}/100</strong>.`,\n  `Average attendance is <strong>${kpi.Avg_Attendance_Percentage}%</strong>, but assignment completion is only <strong>${kpi.Avg_Assignment_Completion_Rate}%</strong>, a gap of <strong>${gap} points</strong>.`,\n  `<strong>${kpi.High_Dropout_Risk_Percent}%</strong> of students are at high dropout risk and <strong>${kpi.Low_Engagement_Percent}%</strong> have low engagement.`,\n  `The pass percentage (grades A to D) is <strong>${kpi.Pass_Percentage}%</strong>.`,\n  `Top locations by student count: ${topCities}.`\n];\n\n// ---- KPI cards ----\nconst cards = [\n  ['Total Students', kpi.Total_Students, ''],\n  ['Avg Engagement Score', kpi.Avg_Engagement_Score, '/100'],\n  ['Avg Attendance', kpi.Avg_Attendance_Percentage, '%'],\n  ['Avg Assignment Completion', kpi.Avg_Assignment_Completion_Rate, '%'],\n  ['Avg Quiz Score', kpi.Avg_Quiz_Score, '%'],\n  ['High Dropout Risk', kpi.High_Dropout_Risk_Percent, '%'],\n  ['Low Engagement', kpi.Low_Engagement_Percent, '%'],\n  ['Pass Percentage', kpi.Pass_Percentage, '%']\n];\nconst cardCell = ([label, val, suffix]) => `\n  <td style=\"width:25%;padding:6px;\">\n    <div style=\"background:#f0f5fb;border-radius:8px;padding:14px 8px;text-align:center;\">\n      <div style=\"font-size:22px;font-weight:bold;color:#1f3a5f;\">${val}${suffix}</div>\n      <div style=\"font-size:12px;color:#5b6b7f;margin-top:4px;\">${label}</div>\n    </div>\n  </td>`;\nconst cardsHtml = `<table width=\"100%\" cellspacing=\"0\" cellpadding=\"0\">\n  <tr>${cards.slice(0, 4).map(cardCell).join('')}</tr>\n  <tr>${cards.slice(4).map(cardCell).join('')}</tr></table>`;\n\n// ---- Distribution tables ----\nconst total = kpi.Total_Students;\nconst distTable = (title, obj) => `\n  <table width=\"48%\" cellspacing=\"0\" cellpadding=\"8\" style=\"display:inline-table;vertical-align:top;border-collapse:collapse;margin:6px 1%;\">\n    <tr style=\"background:#1f3a5f;color:#fff;\"><th align=\"left\">${title}</th><th align=\"right\">Students</th><th align=\"right\">%</th></tr>\n    ${Object.entries(obj).map(([k, v]) => `\n    <tr style=\"border-bottom:1px solid #e3e8ef;\"><td>${k}</td><td align=\"right\">${v}</td><td align=\"right\">${Math.round((v / total) * 1000) / 10}%</td></tr>`).join('')}\n  </table>`;\n\nconst date = new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' });\n\nconst html = `<!DOCTYPE html>\n<html><head><meta charset=\"utf-8\"><title>Student Engagement Report</title></head>\n<body style=\"margin:0;background:#eef2f7;font-family:Arial,Helvetica,sans-serif;color:#2b3a4a;\">\n<div style=\"max-width:820px;margin:20px auto;background:#ffffff;border-radius:10px;overflow:hidden;\">\n  <div style=\"background:#1f3a5f;color:#fff;padding:24px 28px;\">\n    <h1 style=\"margin:0;font-size:24px;\">Student Engagement Report</h1>\n    <div style=\"font-size:13px;margin-top:6px;opacity:0.85;\">Generated automatically on ${date}</div>\n  </div>\n  <div style=\"padding:24px 28px;\">\n    <h2 style=\"color:#1f3a5f;font-size:19px;margin:0 0 10px;\">Executive Summary</h2>\n    <ul style=\"padding-left:20px;line-height:1.6;margin:0 0 20px;\">\n      ${summaryPoints.map(p => `<li style=\"margin-bottom:6px;\">${p}</li>`).join('')}\n    </ul>\n\n    <h2 style=\"color:#1f3a5f;font-size:19px;margin:24px 0 10px;\">Key Performance Indicators</h2>\n    ${cardsHtml}\n\n    <h2 style=\"color:#1f3a5f;font-size:19px;margin:24px 0 10px;\">Distributions</h2>\n    ${distTable('Engagement Level', kpi.Engagement_Level_Distribution)}\n    ${distTable('Dropout Risk', kpi.Dropout_Risk_Distribution)}\n\n    <h2 style=\"color:#1f3a5f;font-size:19px;margin:24px 0 10px;\">Charts</h2>\n    <img src=\"${kpi.Chart_URL}\" alt=\"Student Count by Location\" style=\"max-width:100%;border:1px solid #e3e8ef;border-radius:6px;margin-bottom:16px;\">\n    <img src=\"${kpi.Chart_URL_2}\" alt=\"Dropout Risk by Engagement Level\" style=\"max-width:100%;border:1px solid #e3e8ef;border-radius:6px;\">\n\n    <h2 style=\"color:#1f3a5f;font-size:19px;margin:28px 0 10px;\">AI Insights and Recommendations</h2>\n    <div style=\"background:#f9fbfd;border-left:4px solid #1f3a5f;padding:6px 16px;\">\n      ${mdToHtml(llmText)}\n    </div>\n  </div>\n  <div style=\"background:#f0f5fb;padding:14px 28px;font-size:12px;color:#5b6b7f;\">\n    Report generated by an n8n automation workflow. Data source: Student Engagement Dataset.\n  </div>\n</div>\n</body></html>`;\n\nreturn [{\n  json: { html, subject: `Student Engagement Report - ${date}` },\n  binary: $input.first().binary || {}\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        752,
+        -560
+      ],
+      "id": "ef0f339c-ff1c-460b-b409-4b017fb4f126",
+      "name": "Code in JS2"
+    },
+    {
+      "parameters": {
+        "sendTo": "preetiraj2677@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "message": "={{ $json.html }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        928,
+        -560
+      ],
+      "id": "bdf794bd-a115-4551-922f-1d082d5803cc",
+      "name": "Send a message",
+      "webhookId": "43c9128d-9ce1-4ac1-9b1c-d94ecef0b5c2",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "2N6NzTUojP2t3xEB",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const isBlank = v => v === undefined || v === null || String(v).trim() === '';\n\nconst numCols = ['Age','Semester','Attendance_Percentage','Login_Frequency_Per_Week','Video_Watch_Hours','Assignment_Completion_Rate','Quiz_Attempts','Quiz_Average_Score','Discussion_Forum_Posts','Study_Hours_Per_Week','Last_Login_Days_Ago'];\nconst textCols = ['Student_Name','Gender','Course','Department','Final_Grade','Enrollment_Date','City','Learning_Mode'];\n\n// 1. Duplicate Student_ID \nconst seen = new Set();\nlet rows = $input.all().map(i => i.json).filter(r => {\n  if (seen.has(r.Student_ID)) return false;\n  seen.add(r.Student_ID);\n  return true;\n});\n\n// 2. Trim + numbers convert + missing count\nrows = rows.map(r => {\n  const o = { ...r };\n  let missing = 0;\n  for (const k of Object.keys(o)) if (typeof o[k] === 'string') o[k] = o[k].trim();\n  for (const c of numCols) {\n    if (isBlank(o[c]) || isNaN(Number(o[c]))) { o[c] = null; missing++; }\n    else o[c] = Number(o[c]);\n  }\n  for (const c of [...textCols, 'Engagement_Score', 'Engagement_Level', 'Dropout_Risk']) {\n    if (isBlank(o[c])) missing++;\n  }\n  o.Missing_Fields_Count = missing;\n  return o;\n});\n\n\nconst median = arr => {\n  const a = arr.filter(v => v !== null).sort((x, y) => x - y);\n  const m = Math.floor(a.length / 2);\n  return a.length % 2 ? a[m] : (a[m - 1] + a[m]) / 2;\n};\nconst med = {};\nnumCols.forEach(c => med[c] = median(rows.map(r => r[c])));\n\nconst clamp = (v, a, b) => Math.min(b, Math.max(a, v));\n\nrows = rows.map(o => {\n  for (const c of numCols) if (o[c] === null) o[c] = med[c];\n\n  \n  o.Age = clamp(Math.round(o.Age), 18, 25);\n  o.Semester = clamp(Math.round(o.Semester), 1, 8);\n  o.Attendance_Percentage = clamp(o.Attendance_Percentage, 50, 100);\n  o.Assignment_Completion_Rate = clamp(o.Assignment_Completion_Rate, 0, 100);\n  o.Quiz_Average_Score = clamp(o.Quiz_Average_Score, 0, 100);\n  o.Study_Hours_Per_Week = clamp(o.Study_Hours_Per_Week, 0, 40);\n\n\n  for (const c of textCols) if (isBlank(o[c])) o[c] = 'Unknown';\n\n  \n  if (isBlank(o.Engagement_Score)) {\n    const s = 100 * (\n      0.20 * (o.Attendance_Percentage - 50) / 50 +\n      0.15 * Math.min(o.Login_Frequency_Per_Week / 10, 1) +\n      0.15 * Math.min(o.Video_Watch_Hours / 10, 1) +\n      0.20 * o.Assignment_Completion_Rate / 100 +\n      0.20 * o.Quiz_Average_Score / 100 +\n      0.10 * Math.min(o.Discussion_Forum_Posts / 15, 1)\n    );\n    o.Engagement_Score = Math.round(clamp(s, 0, 100) * 10) / 10;\n  } else {\n    o.Engagement_Score = Number(o.Engagement_Score);\n  }\n\n\n  o.Engagement_Level = o.Engagement_Score < 40 ? 'Low' : o.Engagement_Score < 70 ? 'Medium' : 'High';\n\n  \n  if (isBlank(o.Dropout_Risk)) {\n    const r = 0.35 * (1 - o.Engagement_Score / 100) +\n              0.20 * (1 - (o.Attendance_Percentage - 50) / 50) +\n              0.20 * (1 - o.Assignment_Completion_Rate / 100) +\n              0.25 * Math.min(o.Last_Login_Days_Ago / 30, 1);\n    o.Dropout_Risk = r >= 0.52 ? 'High' : r >= 0.30 ? 'Medium' : 'Low';\n  }\n  return o;\n});\n\nreturn rows.map(r => ({ json: r }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -288,
+        -432
+      ],
+      "id": "691ff6d5-5caa-4199-85eb-b619fbfb7608",
+      "name": "Data Cleaning"
+    },
+    {
+      "parameters": {
+        "jsCode": "const rows = $input.all().map(i => i.json);\nconst total = rows.length;\n\nconst avg = k => {\n  const v = rows.map(r => Number(r[k])).filter(x => !isNaN(x));\n  return v.length ? v.reduce((a, b) => a + b, 0) / v.length : 0;\n};\nconst r1 = x => Math.round(x * 10) / 10;\nconst count = (k, val) => rows.filter(r => r[k] === val).length;\nconst pct = n => r1((n / total) * 100);\n\n// ---- 8 KPIs ----\nconst kpis = {\n  Total_Students: total,\n  Avg_Engagement_Score: r1(avg('Engagement_Score')),\n  Avg_Attendance_Percentage: r1(avg('Attendance_Percentage')),\n  Avg_Assignment_Completion_Rate: r1(avg('Assignment_Completion_Rate')),\n  Avg_Quiz_Score: r1(avg('Quiz_Average_Score')),\n  High_Dropout_Risk_Percent: pct(count('Dropout_Risk', 'High')),\n  Low_Engagement_Percent: pct(count('Engagement_Level', 'Low')),\n  Pass_Percentage: pct(rows.filter(r => ['A', 'B', 'C', 'D'].includes(r.Final_Grade)).length)\n};\n\n// ---- Distributions ----\nconst dist = (k, values) => Object.fromEntries(values.map(v => [v, count(k, v)]));\nconst engagementDist = dist('Engagement_Level', ['Low', 'Medium', 'High']);\nconst dropoutDist = dist('Dropout_Risk', ['Low', 'Medium', 'High']);\n\n// ---- Chart 1: Student count by location ----\nconst cityMap = {};\nrows.forEach(r => {\n  const c = r.City || 'Unknown';\n  cityMap[c] = (cityMap[c] || 0) + 1;\n});\nconst cityCounts = Object.entries(cityMap)\n  .map(([City, Count]) => ({ City, Count }))\n  .sort((a, b) => b.Count - a.Count);\n\nconst chartConfig = {\n  type: 'horizontalBar',\n  data: {\n    labels: cityCounts.map(c => c.City),\n    datasets: [{\n      label: 'Students',\n      data: cityCounts.map(c => c.Count),\n      backgroundColor: 'rgba(54, 162, 235, 0.7)'\n    }]\n  },\n  options: {\n    title: { display: true, text: 'Student Count by Location' },\n    legend: { display: false },\n    scales: { xAxes: [{ ticks: { beginAtZero: true } }] }\n  }\n};\nconst Chart_URL = 'https://quickchart.io/chart?w=800&h=700&c=' +\n  encodeURIComponent(JSON.stringify(chartConfig));\n\n// ---- Chart 2: Dropout Risk by Engagement Level ----\nconst levels = ['Low', 'Medium', 'High'];\nconst risks = ['Low', 'Medium', 'High'];\nconst colors = { Low: 'rgba(75,192,120,0.8)', Medium: 'rgba(255,193,7,0.8)', High: 'rgba(255,99,132,0.8)' };\n\nconst chartConfig2 = {\n  type: 'bar',\n  data: {\n    labels: levels.map(l => l + ' Engagement'),\n    datasets: risks.map(rk => ({\n      label: rk + ' Dropout Risk',\n      backgroundColor: colors[rk],\n      data: levels.map(l => rows.filter(r => r.Engagement_Level === l && r.Dropout_Risk === rk).length)\n    }))\n  },\n  options: {\n    title: { display: true, text: 'Dropout Risk by Engagement Level' },\n    scales: { yAxes: [{ ticks: { beginAtZero: true } }] }\n  }\n};\nconst Chart_URL_2 = 'https://quickchart.io/chart?w=800&h=500&c=' +\n  encodeURIComponent(JSON.stringify(chartConfig2));\n\nreturn [{\n  json: {\n    ...kpis,\n    Engagement_Level_Distribution: engagementDist,\n    Dropout_Risk_Distribution: dropoutDist,\n    Student_Count_By_City: cityCounts,\n    Chart_URL,\n    Chart_URL_2\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -144,
+        -432
+      ],
+      "id": "9f213163-13bf-48ee-ba2c-ae6b82bc2737",
+      "name": "KPI generate"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Sheets Trigger": {
+      "main": [
+        [
+          {
+            "node": "Data Cleaning",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Google Gemini Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Basic LLM Chain": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Total Student": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Student by location": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 2
+          }
+        ]
+      ]
+    },
+    "Merge": {
+      "main": [
+        [
+          {
+            "node": "Code in JS2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JS2": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Data Cleaning": {
+      "main": [
+        [
+          {
+            "node": "KPI generate",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "KPI generate": {
+      "main": [
+        [
+          {
+            "node": "Basic LLM Chain",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Total Student",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Student by location",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "83e5e6ab-2c96-4051-a185-2aa5b2bb644e",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "5e64ccb0df4a90e3f93cb774b587891dc1b7ef49d63a988e5fd38d7795d8b239"
+  },
+  "nodeGroups": [],
+  "id": "kmPm1dnFrQjnuS9Z",
+  "tags": []
+}
